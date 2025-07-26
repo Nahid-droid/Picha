@@ -1,0 +1,9 @@
+{
+  "canisters": {
+    "living-brush-backend": {
+      "main": "main.mo",
+      "type": "motoko"
+    }
+  },
+  "version": 1
+}

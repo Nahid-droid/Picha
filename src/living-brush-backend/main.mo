@@ -1,0 +1,485 @@
+import Time "mo:base/Time";
+import Array "mo:base/Array";
+import Nat "mo:base/Nat";
+import Nat32 "mo:base/Nat32";
+import Float "mo:base/Float";
+import Text "mo:base/Text";
+import Principal "mo:base/Principal";
+import Option "mo:base/Option";
+import Types "types"; // Assuming Types.mo defines the necessary types
+
+actor LivingBrush {
+  stable var nfts : [Types.NFT] = [];
+  stable var currentId : Nat = 0;
+  stable var combinationLimits : [Types.CombinationLimit] = [];
+
+  // Default combination limits
+  let DEFAULT_COMBINATION_LIMIT : Nat = 100;
+  let MAX_WAITLIST_SIZE : Nat = 1000;
+
+  // Helper function to drop elements from array
+  func arrayDrop<T>(arr: [T], count: Nat) : [T] {
+    if (count >= Array.size(arr)) {
+      return [];
+    };
+    let size = Array.size(arr);
+    var result : [T] = [];
+    var i : Nat = count;
+    while (i < size) {
+      result := Array.append(result, [arr[i]]);
+      i += 1;
+    };
+    return result;
+  };
+
+  // Helper function to replace element in array
+  func arrayReplace<T>(arr: [T], index: Nat, newValue: T) : [T] {
+    if (index >= Array.size(arr)) {
+      return arr;
+    };
+    let before = Array.take(arr, index);
+    let after = arrayDrop(arr, index + 1);
+    return Array.flatten([before, [newValue], after]);
+  };
+
+  // Helper function to remove element from array
+  func arrayRemove<T>(arr: [T], index: Nat) : [T] {
+    if (index >= Array.size(arr)) {
+      return arr;
+    };
+    let before = Array.take(arr, index);
+    let after = arrayDrop(arr, index + 1);
+    return Array.flatten([before, after]);
+  };
+
+  // Enhanced image hash validation using IPFS CID
+  func validateImageHash(uri: Text, expectedHash: Text) : Bool {
+    // Extract CID from IPFS URI (ipfs://CID or https://ipfs.io/ipfs/CID)
+    let ipfsPrefix = "ipfs://";
+    let httpPrefix = "https://ipfs.io/ipfs/";
+
+    var cid = "";
+
+    if (Text.startsWith(uri, #text ipfsPrefix)) {
+      cid := Option.get(Text.stripStart(uri, #text ipfsPrefix), "");
+    } else if (Text.startsWith(uri, #text httpPrefix)) {
+      cid := Option.get(Text.stripStart(uri, #text httpPrefix), "");
+    } else {
+      return false;
+    };
+
+    // Simple validation - in production, you'd want proper CID validation
+    return cid == expectedHash and cid.size() > 0;
+  };
+
+  // Generate genetic traits based on uniqueness factors
+  func generateGeneticTraits(factors: Types.UniquenessFactors) : Types.GeneticTraits {
+    let hash = Text.hash(factors.location_hash # factors.timestamp_seed # factors.wallet_entropy);
+    let normalizedHash = Float.fromInt(Nat32.toNat(hash % 1000)) / 1000.0;
+
+    return {
+      luminosity = (normalizedHash * 0.3) + 0.4; // 0.4-0.7 range
+      complexity = (normalizedHash * 0.4) + 0.3; // 0.3-0.7 range
+      ethereal_quality = (normalizedHash * 0.5) + 0.2; // 0.2-0.7 range
+      evolution_speed = (normalizedHash * 0.6) + 0.2; // 0.2-0.8 range
+      style_intensity = (normalizedHash * 0.4) + 0.5; // 0.5-0.9 range
+    };
+  };
+
+  // Check scarcity for combination
+  func checkCombinationScarcity(combination: Text) : Types.ScarcityInfo {
+    let existing = Array.find<Types.CombinationLimit>(combinationLimits, func(c) = c.combination == combination);
+
+    switch (existing) {
+      case (?limit) {
+        let rarity = if (limit.limit > 0) {
+          Float.fromInt(limit.current_count) / Float.fromInt(limit.limit)
+        } else {
+          0.0
+        };
+        let multiplier = 1.0 + (rarity * 0.5); // Price increases with scarcity
+        return {
+          combination = combination;
+          total_limit = limit.limit;
+          minted_count = limit.current_count;
+          rarity_score = rarity;
+          price_multiplier = multiplier;
+        };
+      };
+      case null {
+        return {
+          combination = combination;
+          total_limit = DEFAULT_COMBINATION_LIMIT;
+          minted_count = 0;
+          rarity_score = 0.0;
+          price_multiplier = 1.0;
+        };
+      };
+    };
+  };
+
+  // Update combination count
+  func updateCombinationCount(combination: Text) : Bool {
+    let size = Array.size(combinationLimits);
+    var i : Nat = 0; // Initialize iterator for while loop
+    while (i < size) { // Convert for to while
+      if (combinationLimits[i].combination == combination) {
+        // Introduce a local variable for clarity and to resolve the syntax error
+        let currentLimit = combinationLimits[i];
+        if (currentLimit.current_count >= currentLimit.limit) return false;
+        let updatedLimit = {
+          combination = combination;
+          limit = currentLimit.limit;
+          current_count = currentLimit.current_count + 1;
+          waitlist = currentLimit.waitlist;
+        };
+        combinationLimits := arrayReplace(combinationLimits, i, updatedLimit);
+        return true;
+      };
+      i += 1; // Increment iterator
+    };
+    // Create new combination if not found
+    combinationLimits := Array.append(combinationLimits, [{
+      combination = combination;
+      limit = DEFAULT_COMBINATION_LIMIT;
+      current_count = 1;
+      waitlist = [];
+    }]);
+    return true;
+  };
+
+  // Mint NFT with enhanced validation and scarcity
+  public shared(msg) func mint(
+    artist: Text,
+    eventType: Text,
+    prompt: Text,
+    mode: Text,
+    imageURI: Text,
+    imageHash: Text,
+    uniqueness_factors: Types.UniquenessFactors
+  ) : async Types.MintResult {
+    let caller = msg.caller;
+
+    // Validate image hash
+    if (not validateImageHash(imageURI, imageHash)) {
+      return #Err("Invalid image hash or URI format");
+    };
+
+    let combination = artist # "-" # eventType;
+    let scarcityInfo = checkCombinationScarcity(combination);
+
+    // Check if combination is available
+    if (scarcityInfo.minted_count >= scarcityInfo.total_limit) {
+      return #Err("Combination sold out");
+    };
+
+    // Update combination count
+    if (not updateCombinationCount(combination)) {
+      return #Err("Failed to update combination count");
+    };
+
+    let timestamp = Time.now();
+    let genetic_traits = generateGeneticTraits(uniqueness_factors);
+
+    let nft : Types.NFT = {
+      id = currentId;
+      owner = caller;
+      artist = artist;
+      eventType = eventType;
+      prompt = prompt;
+      mode = mode;
+      version = 1;
+      imageURI = imageURI;
+      timestamp = timestamp;
+      history = [{
+        eventId = "initial";
+        timestamp = timestamp;
+        imageHash = imageHash;
+        trigger = "initial_mint";
+        traits_changed = ["all"];
+      }];
+      genetic_traits = genetic_traits;
+      uniqueness_factors = uniqueness_factors;
+      scarcity_info = scarcityInfo;
+      last_evolution = timestamp;
+    };
+
+    nfts := Array.append(nfts, [nft]);
+    currentId += 1;
+
+    #Ok(nft.id)
+  };
+
+  // Transfer NFT ownership
+  public shared(msg) func transferNFT(id: Nat, to: Principal) : async Types.TransferResult {
+    let caller = msg.caller;
+
+    if (id >= Array.size(nfts)) {
+      return #Err("NFT not found");
+    };
+
+    let nft = nfts[id];
+
+    if (nft.owner != caller) {
+      return #Err("Not the owner");
+    };
+
+    if (to == caller) {
+      return #Err("Cannot transfer to yourself");
+    };
+
+    let updatedNFT = {
+      id = nft.id;
+      owner = to;
+      artist = nft.artist;
+      eventType = nft.eventType;
+      prompt = nft.prompt;
+      mode = nft.mode;
+      version = nft.version;
+      imageURI = nft.imageURI;
+      timestamp = nft.timestamp;
+      history = nft.history;
+      genetic_traits = nft.genetic_traits;
+      uniqueness_factors = nft.uniqueness_factors;
+      scarcity_info = nft.scarcity_info;
+      last_evolution = nft.last_evolution;
+    };
+
+    nfts := arrayReplace(nfts, id, updatedNFT);
+    #Ok(())
+  };
+
+  // Burn NFT (only owner can burn)
+  public shared(msg) func burnNFT(id: Nat) : async Types.TransferResult {
+    let caller = msg.caller;
+
+    if (id >= Array.size(nfts)) {
+      return #Err("NFT not found");
+    };
+
+    let nft = nfts[id];
+
+    if (nft.owner != caller) {
+      return #Err("Not the owner");
+    };
+
+    nfts := arrayRemove(nfts, id);
+    #Ok(())
+  };
+
+  // Update NFT with owner validation
+  public shared(msg) func updateNFT(
+    id: Nat,
+    eventId: Text,
+    imageURI: Text,
+    imageHash: Text
+  ) : async Types.TransferResult {
+    let caller = msg.caller;
+
+    if (id >= Array.size(nfts)) {
+      return #Err("NFT not found");
+    };
+
+    let nft = nfts[id];
+
+    if (nft.owner != caller) {
+      return #Err("Not the owner");
+    };
+
+    if (not validateImageHash(imageURI, imageHash)) {
+      return #Err("Invalid image hash");
+    };
+
+    let timestamp = Time.now();
+    let updatedNFT : Types.NFT = {
+      id = nft.id;
+      owner = nft.owner;
+      artist = nft.artist;
+      eventType = nft.eventType;
+      prompt = nft.prompt;
+      mode = nft.mode;
+      version = nft.version + 1;
+      imageURI = imageURI;
+      timestamp = nft.timestamp;
+      history = Array.append(nft.history, [{
+        eventId = eventId;
+        timestamp = timestamp;
+        imageHash = imageHash;
+        trigger = "owner_update";
+        traits_changed = [];
+      }]);
+      genetic_traits = nft.genetic_traits;
+      uniqueness_factors = nft.uniqueness_factors;
+      scarcity_info = nft.scarcity_info;
+      last_evolution = nft.last_evolution;
+    };
+
+    nfts := arrayReplace(nfts, id, updatedNFT);
+    #Ok(())
+  };
+
+  // Evolve NFT traits (micro-evolution)
+  public func evolveNFT(id: Nat, evolutionStrength: Float) : async Types.TransferResult {
+    if (id >= Array.size(nfts)) {
+      return #Err("NFT not found");
+    };
+
+    let oldNFT = nfts[id];
+    let timeSinceLastEvolution = Time.now() - oldNFT.last_evolution;
+
+    // Only evolve if enough time has passed (24 hours = 86,400,000,000,000 nanoseconds)
+    if (timeSinceLastEvolution < 86400000000000) {
+      return #Err("Evolution cooldown not met");
+    };
+
+    let oldTraits = oldNFT.genetic_traits;
+    let newTraits : Types.GeneticTraits = {
+      luminosity = Float.min(1.0, Float.max(0.0, oldTraits.luminosity + (evolutionStrength * 0.1)));
+      complexity = Float.min(1.0, Float.max(0.0, oldTraits.complexity + (evolutionStrength * 0.05)));
+      ethereal_quality = Float.min(1.0, Float.max(0.0, oldTraits.ethereal_quality + (evolutionStrength * 0.08)));
+      evolution_speed = oldTraits.evolution_speed;
+      style_intensity = Float.min(1.0, Float.max(0.0, oldTraits.style_intensity + (evolutionStrength * 0.03)));
+    };
+
+    let updatedNFT : Types.NFT = {
+      id = oldNFT.id;
+      owner = oldNFT.owner;
+      artist = oldNFT.artist;
+      eventType = oldNFT.eventType;
+      prompt = oldNFT.prompt;
+      mode = oldNFT.mode;
+      version = oldNFT.version + 1;
+      imageURI = oldNFT.imageURI;
+      timestamp = oldNFT.timestamp;
+      history = Array.append(oldNFT.history, [{
+        eventId = "micro_evolution";
+        timestamp = Time.now();
+        imageHash = ""; // Image hash might not change during micro-evolution
+        trigger = "micro_evolution";
+        traits_changed = ["luminosity", "complexity", "ethereal_quality", "style_intensity"];
+      }]);
+      genetic_traits = newTraits;
+      uniqueness_factors = oldNFT.uniqueness_factors;
+      scarcity_info = oldNFT.scarcity_info;
+      last_evolution = Time.now();
+    };
+
+    nfts := arrayReplace(nfts, id, updatedNFT);
+    #Ok(())
+  };
+
+  // Join waitlist for sold-out combination
+  public shared(msg) func joinWaitlist(combination: Text) : async Types.TransferResult {
+    let caller = msg.caller;
+    let size = Array.size(combinationLimits);
+    var i : Nat = 0; // Initialize iterator for while loop
+    while (i < size) { // Convert for to while
+      if (combinationLimits[i].combination == combination) {
+        // Corrected line: Access the element first, then its field
+        let currentCombinationLimit = combinationLimits[i];
+        if (Array.find<Principal>(currentCombinationLimit.waitlist, func(x) = x == caller) != null) {
+          return #Err("Already in waitlist");
+        };
+        if (Array.size(currentCombinationLimit.waitlist) >= MAX_WAITLIST_SIZE) {
+          return #Err("Waitlist full");
+        };
+        let updatedLimit = {
+          combination = combination;
+          limit = currentCombinationLimit.limit;
+          current_count = currentCombinationLimit.current_count;
+          waitlist = Array.append(currentCombinationLimit.waitlist, [caller]);
+        };
+        combinationLimits := arrayReplace(combinationLimits, i, updatedLimit);
+        return #Ok(());
+      };
+      i += 1; // Increment iterator
+    };
+    #Err("Combination not found")
+  };
+
+  // Query functions
+  public query func getNFT(id: Nat) : async ?Types.NFT {
+    if (id < Array.size(nfts)) {
+      return ?nfts[id];
+    };
+    return null;
+  };
+
+  public query func listAllNFTs() : async [Types.NFT] {
+    return nfts;
+  };
+
+  public query func getNFTsByOwner(owner: Principal) : async [Types.NFT] {
+    // Array.filter is already efficient and idiomatic for this
+    return Array.filter<Types.NFT>(nfts, func(nft) = nft.owner == owner);
+  };
+
+  public query func getHistory(id: Nat) : async ?[Types.VersionLog] {
+    if (id < Array.size(nfts)) {
+      return ?nfts[id].history;
+    };
+    return null;
+  };
+
+  public query func getAvailableCombinations() : async [Types.ScarcityInfo] {
+    var results : [Types.ScarcityInfo] = [];
+    // Keeping for...in for vals() as it's idiomatic for iterators
+    for (limit in combinationLimits.vals()) {
+      let scarcity = checkCombinationScarcity(limit.combination);
+      results := Array.append(results, [scarcity]);
+    };
+    return results;
+  };
+
+  public query func getCombinationStats(combination: Text) : async ?Types.CombinationStats {
+    // Keeping for...in for vals() as it's idiomatic for iterators
+    for (limit in combinationLimits.vals()) {
+      if (limit.combination == combination) {
+        let available = if (limit.current_count <= limit.limit) {
+          Nat.sub(limit.limit, limit.current_count)
+        } else {
+          0
+        };
+        let rarity = Float.fromInt(limit.current_count) / Float.fromInt(limit.limit);
+        return ?{
+          available = available;
+          total = limit.limit;
+          waitlist_size = Array.size(limit.waitlist);
+          price_multiplier = 1.0 + (rarity * 0.5);
+        };
+      };
+    };
+    return null;
+  };
+
+  public shared(msg) func getWaitlistPosition(combination: Text) : async ?Nat {
+    let caller = msg.caller;
+
+    // Keeping for...in for vals() as it's idiomatic for iterators
+    for (limit in combinationLimits.vals()) {
+      if (limit.combination == combination) {
+        let waitlist = limit.waitlist;
+        let waitlistSize = Array.size(waitlist);
+        var i : Nat = 0; // Initialize iterator for while loop
+        while (i < waitlistSize) { // Convert for to while
+          if (waitlist[i] == caller) {
+            return ?(i + 1);
+          };
+          i += 1; // Increment iterator
+        };
+      };
+    };
+    return null;
+  };
+
+  public query func getTotalSupply() : async Nat {
+    return Array.size(nfts);
+  };
+
+  public query func getOwnerOf(id: Nat) : async ?Principal {
+    if (id < Array.size(nfts)) {
+      return ?nfts[id].owner;
+    };
+    return null;
+  };
+}

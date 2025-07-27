@@ -34,6 +34,26 @@ logger = logging.getLogger(__name__)
 # Validate configuration
 Config.validate()
 
+# --- CORS Configuration Setup ---
+# Ensure CORS_ORIGINS from Config is a mutable list of allowed origins.
+# Assuming Config.CORS_ORIGINS is a string or list loaded from environment variables.
+# It's crucial that this list eventually includes your Vercel frontend URL.
+allowed_origins = []
+if isinstance(Config.CORS_ORIGINS, str):
+    # Split comma-separated string from environment variables into a list
+    allowed_origins = [o.strip() for o in Config.CORS_ORIGINS.split(',') if o.strip()]
+elif isinstance(Config.CORS_ORIGINS, (list, tuple)):
+    allowed_origins = list(Config.CORS_ORIGINS)
+
+# Add the specific Vercel URL if it's not already in the allowed_origins list.
+# THIS IS THE KEY CHANGE FOR YOUR CURRENT CORS ERROR.
+vercel_frontend_url = "https://picha-wfxt-nahid-droids-projects.vercel.app"
+if vercel_frontend_url not in allowed_origins:
+    allowed_origins.append(vercel_frontend_url)
+
+logger.info(f"Configured CORS allowed origins: {allowed_origins}")
+# --- End CORS Configuration Setup ---
+
 # Initialize canister client
 canister_client = None
 if Config.CANISTER_ENABLED:
@@ -51,22 +71,19 @@ if Config.CANISTER_ENABLED:
 
 # Initialize Flask app
 app = Flask(__name__)
-CORS(app, supports_credentials=True)
 # Set a secret key for session management
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'a_very_secret_key_for_flask_session_development_only')
 if app.secret_key == 'a_very_secret_key_for_flask_session_development_only' and not Config.DEBUG:
     logger.warning("🚨 WARNING: FLASK_SECRET_KEY is not set in .env or is using a default value. This is insecure for production!")
 
+# Apply CORS to the Flask app (HTTP endpoints). Only do this ONCE.
+CORS(app, origins=allowed_origins, supports_credentials=True)
 
-# Initialize Flask-SocketIO
-# Configure for both development and production
+# Initialize Flask-SocketIO. Use the same allowed_origins for WebSocket connections.
 if Config.DEBUG: # Development
-    socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ORIGINS, async_mode='eventlet', logger=True, engineio_logger=True)
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='eventlet', logger=True, engineio_logger=True)
 else: # Production
-    socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ORIGINS, async_mode='eventlet') # Use eventlet for production for better performance
-
-# Setup CORS for the Flask app (HTTP endpoints)
-CORS(app, origins=Config.CORS_ORIGINS)
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='eventlet') # Use eventlet for production for better performance
 
 # Setup WebSocket event handlers
 setup_websocket_handlers(socketio)

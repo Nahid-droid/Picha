@@ -1,3 +1,6 @@
+import eventlet # Import eventlet first
+eventlet.monkey_patch() # Apply monkey patch at the very beginning
+
 import os
 import random
 import asyncio
@@ -58,10 +61,8 @@ if app.secret_key == 'a_very_secret_key_for_flask_session_development_only' and 
 # Initialize Flask-SocketIO
 # Configure for both development and production
 if Config.DEBUG: # Development
-    # Changed async_mode from 'gevent' to 'eventlet' to match Gunicorn worker
     socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ORIGINS, async_mode='eventlet', logger=True, engineio_logger=True)
 else: # Production
-    # Changed async_mode from 'gevent' to 'eventlet' to match Gunicorn worker
     socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ORIGINS, async_mode='eventlet') # Use eventlet for production for better performance
 
 # Setup CORS for the Flask app (HTTP endpoints)
@@ -557,6 +558,8 @@ async def create_nft():
             
             # Step 3: Attempt canister minting if client is available
             if canister_client and Config.CANISTER_ENABLED:
+                # Initialize canister_mint_result to None here
+                canister_mint_result = None
                 try:
                     logger.info("Attempting to mint NFT on canister...")
                     
@@ -801,7 +804,8 @@ async def check_for_nft_evolution_jobs():
             try:
                 logger.info(f"Scheduler: Initiating auto-evolution for NFT: {nft_id} (Owner: {owner_address})")
                 # Call the main evolve_nft method without a specific user prompt (auto-evolution)
-                await nft_engine.evolve_nft(nft_id, current_event_type, user_prompt="auto-evolution based on social media activity")
+                # This will assign evolved_nft
+                evolved_nft = await nft_engine.evolve_nft(nft_id, current_event_type, user_prompt="auto-evolution based on social media activity")
                 logger.info(f"Scheduler: Successfully auto-evolved NFT: {nft_id}")
                 
                 # Broadcast evolution notification after successful auto-evolution
@@ -809,10 +813,10 @@ async def check_for_nft_evolution_jobs():
                 if evolved_nft_data:
                     broadcast_evolution_notification(
                         socketio, 
-                        evolved_nft.get('id'), 
-                        evolved_nft.get('version'), 
-                        evolved_nft.get('image_url'), 
-                        json.loads(evolved_nft.get('genetic_traits', '{}'))
+                        evolved_nft_data.get('id'), # Use evolved_nft_data
+                        evolved_nft_data.get('version'), # Use evolved_nft_data
+                        evolved_nft_data.get('image_url'), # Use evolved_nft_data
+                        json.loads(evolved_nft_data.get('genetic_traits', '{}')) # Use evolved_nft_data
                     )
                     logger.info(f"Scheduler: Broadcasted evolution update for NFT ID: {nft_id}")
 
@@ -1190,6 +1194,8 @@ def get_all_nfts():
 @app.route('/api/evolve-nft', methods=['POST'])
 async def evolve_nft():
     """Evolve an existing NFT and broadcast evolution updates."""
+    # Initialize evolved_nft to None
+    evolved_nft = None
     try:
         data = request.get_json()
         required_fields = ['nft_id', 'new_event_type'] # user_prompt is now optional
@@ -1411,12 +1417,12 @@ scheduler.add_job(
 
 
 if __name__ == '__main__':
-    print("Starting APScheduler...")
+    logger.info("Starting APScheduler...")
     scheduler.start()
     logger.info("APScheduler started.")
     
     # Ensure Flask and SocketIO run on the main thread
-    port = int(os.environ.get("PORT", 5000))  # Render PORT mühit dəyişəni
-    print("🔄 About to start socketio server...")
+    port = int(os.environ.get("PORT", 5000))
+    logger.info("🔄 About to start socketio server...")
     socketio.run(app, debug=False, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
-    print("✅ Server started successfully!")
+    logger.info("✅ Server started successfully!")

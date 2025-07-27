@@ -3,9 +3,12 @@ services:
     name: picha-backend
     env: python
     rootDir: .
-    buildCommand: pip install -r requirements.txt && python -m nltk.downloader vader_lexicon
-    # startCommand yazmırıq, çünki Procfile istifadə olunur
+    buildCommand: |
+      pip install -r requirements.txt
+      python -m nltk.downloader -d /opt/render/project/src/nltk_data vader_lexicon
     envVars:
       - key: FLASK_ENV
         value: production
+      - key: NLTK_DATA
+        value: /opt/render/project/src/nltk_data
     plan: free

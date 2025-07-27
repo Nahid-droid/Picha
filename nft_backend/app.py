@@ -36,17 +36,13 @@ Config.validate()
 
 # --- CORS Configuration Setup ---
 # Ensure CORS_ORIGINS from Config is a mutable list of allowed origins.
-# Assuming Config.CORS_ORIGINS is a string or list loaded from environment variables.
-# It's crucial that this list eventually includes your Vercel frontend URL.
 allowed_origins = []
 if isinstance(Config.CORS_ORIGINS, str):
-    # Split comma-separated string from environment variables into a list
     allowed_origins = [o.strip() for o in Config.CORS_ORIGINS.split(',') if o.strip()]
 elif isinstance(Config.CORS_ORIGINS, (list, tuple)):
     allowed_origins = list(Config.CORS_ORIGINS)
 
 # Add the specific Vercel URL if it's not already in the allowed_origins list.
-# THIS IS THE KEY CHANGE FOR YOUR CURRENT CORS ERROR.
 vercel_frontend_url = "https://picha-wfxt-nahid-droids-projects.vercel.app"
 if vercel_frontend_url not in allowed_origins:
     allowed_origins.append(vercel_frontend_url)
@@ -80,10 +76,11 @@ if app.secret_key == 'a_very_secret_key_for_flask_session_development_only' and 
 CORS(app, origins=allowed_origins, supports_credentials=True)
 
 # Initialize Flask-SocketIO. Use the same allowed_origins for WebSocket connections.
+# Removed logger=True, engineio_logger=True for potentially cleaner behavior on Render.
 if Config.DEBUG: # Development
-    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='eventlet', logger=True, engineio_logger=True)
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='eventlet')
 else: # Production
-    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='eventlet') # Use eventlet for production for better performance
+    socketio = SocketIO(app, cors_allowed_origins=allowed_origins, async_mode='eventlet')
 
 # Setup WebSocket event handlers
 setup_websocket_handlers(socketio)
@@ -397,22 +394,16 @@ async def retry_failed_canister_mints():
     success_retries = []
     failed_retries = []
 
-    logger.info(f"/api/retry-failed: Found {len(failed_nfts)} NFTs with failed_mint status.")
+    logger.info(f"Retrying failed canister mints...")
 
     for nft in failed_nfts:
         try:
             # Reconstruct NFTMetadata from local data
-            # This requires careful mapping of local DB fields to NFTMetadata structure
-            # Assuming 'metadata', 'genetic_traits', 'scarcity_info' are stored as JSON strings
-            # and 'attributes' is also within 'metadata' or separately.
-
-            # Deserialize JSON fields (these are already JSON strings from the DB)
             metadata_dict = json.loads(nft['metadata']) if nft['metadata'] else {}
             genetic_traits_json = nft['genetic_traits'] if nft['genetic_traits'] else '{}'
             scarcity_info_json = nft['scarcity_info'] if nft['scarcity_info'] else '{}'
             uniqueness_factors_json = nft['uniqueness_factors'] if nft['uniqueness_factors'] else '{}'
 
-            # Construct NFTMetadata dataclass
             canister_metadata = NFTMetadata(
                 name=nft['name'],
                 description=nft['description'],
@@ -421,10 +412,10 @@ async def retry_failed_canister_mints():
                 eventType=nft['event_type'],
                 prompt=nft['user_prompt'],
                 mode=nft['mode'],
-                uniqueness_factors=uniqueness_factors_json, # Pass as JSON string
-                genetic_traits=genetic_traits_json,         # Pass as JSON string
-                scarcity_info=scarcity_info_json,           # Pass as JSON string
-                attributes=json.dumps(metadata_dict.get('attributes', {})) # Ensure attributes is a JSON string
+                uniqueness_factors=uniqueness_factors_json,
+                genetic_traits=genetic_traits_json,
+                scarcity_info=scarcity_info_json,
+                attributes=json.dumps(metadata_dict.get('attributes', {}))
             )
 
             owner_principal = Principal.from_text(nft['owner_address'])
@@ -519,14 +510,13 @@ async def create_nft():
             location_hash=uniqueness_data['location_hash'],
             timestamp_seed=uniqueness_data['timestamp_seed'],
             wallet_entropy=uniqueness_data['wallet_entropy'],
-            wallet_principal=uniqueness_data.get('wallet_principal', owner_address),  # Added
-            wallet_account_id=uniqueness_data.get('wallet_account_id', ''),  # Added
+            wallet_principal=uniqueness_data.get('wallet_principal', owner_address),
+            wallet_account_id=uniqueness_data.get('wallet_account_id', ''),
             biometric_opt_in=uniqueness_data.get('biometric_opt_in', False),
             biometric_hash=uniqueness_data.get('biometric_hash')
         )
 
         # Generate genetic traits (example, adapt as needed)
-        # Generate genetic traits based on uniqueness factors
         generated_genetic_traits = GeneticTraits(
                 luminosity=hash(uniqueness_factors.location_hash) % 100 / 100.0,
                 architectural_complexity=int(uniqueness_factors.timestamp_seed) % 100 / 100.0,
@@ -557,9 +547,9 @@ async def create_nft():
                 user_prompt=user_prompt, 
                 uniqueness_factors=uniqueness_factors, 
                 owner_address=owner_address,
-                genetic_traits=generated_genetic_traits, # Pass generated traits
-                scarcity_info=generated_scarcity_info, # Pass generated scarcity
-                evolution_period_days=evolution_period_days # Pass evolution period
+                genetic_traits=generated_genetic_traits,
+                scarcity_info=generated_scarcity_info,
+                evolution_period_days=evolution_period_days
             )
             
             local_nft_id = local_nft_result.get('nft_id')
@@ -575,8 +565,7 @@ async def create_nft():
             
             # Step 3: Attempt canister minting if client is available
             if canister_client and Config.CANISTER_ENABLED:
-                # Initialize canister_mint_result to None here
-                canister_mint_result = None
+                canister_mint_result = None # Initialize to None
                 try:
                     logger.info("Attempting to mint NFT on canister...")
                     
@@ -593,11 +582,9 @@ async def create_nft():
                             eventType=local_nft_data.get('event_type', 'unknown'),
                             prompt=local_nft_data.get('user_prompt', ''),
                             mode=local_nft_data.get('mode', 'unknown'),
-                            # These are already JSON strings from db_manager.save_nft
                             uniqueness_factors=local_nft_data.get('uniqueness_factors', '{}'),
                             genetic_traits=local_nft_data.get('genetic_traits', '{}'),
                             scarcity_info=local_nft_data.get('scarcity_info', '{}'),
-                            # This needs to be explicitly dumped to JSON string
                             attributes=json.dumps(json.loads(local_nft_data.get('metadata', '{}')).get('attributes', {}))
                         )
                         
@@ -628,7 +615,7 @@ async def create_nft():
                                 "canister_mint_attempted": True,
                                 "canister_status": "failed",
                                 "canister_error": str(error_message),
-                                "canister_error_code": getattr(error_message, 'code', None) # Assuming error_message might be a CanisterError object
+                                "canister_error_code": getattr(error_message, 'code', None)
                             })
                             
                             # Mark local NFT as pending canister mint
@@ -821,7 +808,6 @@ async def check_for_nft_evolution_jobs():
             try:
                 logger.info(f"Scheduler: Initiating auto-evolution for NFT: {nft_id} (Owner: {owner_address})")
                 # Call the main evolve_nft method without a specific user prompt (auto-evolution)
-                # This will assign evolved_nft
                 evolved_nft = await nft_engine.evolve_nft(nft_id, current_event_type, user_prompt="auto-evolution based on social media activity")
                 logger.info(f"Scheduler: Successfully auto-evolved NFT: {nft_id}")
                 
@@ -830,10 +816,10 @@ async def check_for_nft_evolution_jobs():
                 if evolved_nft_data:
                     broadcast_evolution_notification(
                         socketio, 
-                        evolved_nft_data.get('id'), # Use evolved_nft_data
-                        evolved_nft_data.get('version'), # Use evolved_nft_data
-                        evolved_nft_data.get('image_url'), # Use evolved_nft_data
-                        json.loads(evolved_nft_data.get('genetic_traits', '{}')) # Use evolved_nft_data
+                        evolved_nft_data.get('id'), 
+                        evolved_nft_data.get('version'), 
+                        evolved_nft_data.get('image_url'), 
+                        json.loads(evolved_nft_data.get('genetic_traits', '{}'))
                     )
                     logger.info(f"Scheduler: Broadcasted evolution update for NFT ID: {nft_id}")
 
@@ -854,6 +840,8 @@ async def retry_canister_minting_background():
         # Get NFTs pending canister minting (using 'failed_mint' status for retries)
         pending_nfts = nft_engine.db_manager.get_nfts_by_canister_status("failed_mint")
         
+        logger.info(f"Retrying failed canister mints...") # Moved log outside loop
+
         for nft_data in pending_nfts:
             try:
                 logger.info(f"Retrying canister mint for NFT {nft_data['id']}")
@@ -892,8 +880,6 @@ async def retry_canister_minting_background():
                 elif canister_mint_result and canister_mint_result.get('Err'):
                     error_message = canister_mint_result['Err']
                     logger.error(f"Failed to retry canister mint for NFT {nft_data['id']} due to CanisterError: {error_message}")
-                    # Keep status as failed_mint for future retries if it's not a permanent error
-                    # Consider adding a retry counter to avoid infinite retries
                     nft_engine.db_manager.update_nft_canister_status(
                         nft_data['id'], 
                         None,
@@ -933,7 +919,6 @@ async def manual_retry_canister_mints():
         if not canister_client:
             return jsonify({"error": "Canister client not available"}), 503
         
-        # Run retry function in the background (or directly if blocking is acceptable)
         await retry_canister_minting_background()
         
         return jsonify({
@@ -954,7 +939,6 @@ async def admin_canister_stats():
         if not canister_client:
             return jsonify({"error": "Canister client not available"}), 503
         
-        # Get comprehensive canister statistics
         stats = {
             "canister_info": await canister_client.get_canister_info(),
             "local_nfts": len(nft_engine.db_manager.get_all_nfts()),
@@ -1125,10 +1109,6 @@ def check_scarcity():
         }
 
         # --- WebSocket Integration: Broadcast scarcity update ---
-        # This endpoint is primarily for checking, but if the scarcity changes as a result
-        # of some internal logic (e.g., a background process minting), this broadcast
-        # ensures clients are updated. For explicit scarcity changes (like a mint),
-        # the broadcast is handled in create_nft.
         broadcast_scarcity_update(
             socketio, 
             artist, 
@@ -1177,7 +1157,7 @@ def get_nft_evolution(nft_id):
             "evolution_history": evolution_history,
             "current_genetic_traits": current_traits,
             "trait_change_summary": trait_changes,
-            "evolution_period_days": nft_data.get('evolution_period_days') # Include evolution period
+            "evolution_period_days": nft_data.get('evolution_period_days')
         }
         
         return jsonify(response)
@@ -1211,11 +1191,10 @@ def get_all_nfts():
 @app.route('/api/evolve-nft', methods=['POST'])
 async def evolve_nft():
     """Evolve an existing NFT and broadcast evolution updates."""
-    # Initialize evolved_nft to None
-    evolved_nft = None
+    evolved_nft = None # Initialize to None
     try:
         data = request.get_json()
-        required_fields = ['nft_id', 'new_event_type'] # user_prompt is now optional
+        required_fields = ['nft_id', 'new_event_type']
         missing_fields = [field for field in required_fields if field not in data]
         
         if missing_fields:
@@ -1223,7 +1202,7 @@ async def evolve_nft():
         
         nft_id = data['nft_id']
         new_event_type = EventType(data['new_event_type'])
-        user_prompt = data.get('user_prompt') # Get user_prompt if provided
+        user_prompt = data.get('user_prompt')
         
         evolved_nft = await nft_engine.evolve_nft(nft_id, new_event_type, user_prompt)
 
@@ -1278,8 +1257,6 @@ def generate_random_traits():
     """Generate a set of random genetic traits"""
     try:
         # Assuming generate_initial_traits is the right method for random-like generation
-        # and it needs UniquenessFactors. For a truly "random" endpoint, it might be simplified.
-        # For now, let's create dummy uniqueness factors.
         dummy_uniqueness = UniquenessFactors(
             location_hash=str(time.time()),
             timestamp_seed=str(int(time.time() * 1000)),
@@ -1302,22 +1279,15 @@ def next_generation():
         if not selected_nfts_ids or not isinstance(selected_nfts_ids, list) or len(selected_nfts_ids) < 2:
             return jsonify({"error": "Please select at least two NFTs for breeding."}), 400
             
-        # Retrieve full NFT data for the selected IDs
         selected_nfts = [nft_engine.db_manager.get_nft(nft_id) for nft_id in selected_nfts_ids]
-        selected_nfts = [nft for nft in selected_nfts if nft is not None] # Filter out any not found NFTs
+        selected_nfts = [nft for nft in selected_nfts if nft is not None]
         
         if len(selected_nfts) < 2:
             return jsonify({"error": "Could not find at least two selected NFTs in the database."}), 400
         
-        # Extract genetic traits from selected NFTs
         parent_traits = [GeneticTraits(**json.loads(nft['genetic_traits'])) for nft in selected_nfts]
+        offspring_traits = nft_engine.evolution_algorithm.generate_next_generation(parent_traits)
         
-        # Generate offspring traits
-        offspring_traits = nft_engine.evolution_algorithm.generate_next_generation(parent_traits) # Corrected to evolution_algorithm
-        
-        # For simplicity, let's create a placeholder for a new NFT with these traits
-        # In a real application, you might then use these traits to mint a new NFT
-        # For now, we'll just return the new traits.
         return jsonify({"offspring_traits": [trait.to_dict() for trait in offspring_traits]})
         
     except Exception as e:
@@ -1341,12 +1311,12 @@ def join_waitlist():
         except ValueError:
             return jsonify({"error": f"Invalid event type: {event_type_str}. Must be one of {[e.value for e in EventType]}"}), 400
             
-        success = nft_engine.db_manager.add_to_waitlist(f"{artist}-{event_type.value}", user_address) # Pass combination string
+        success = nft_engine.db_manager.add_to_waitlist(f"{artist}-{event_type.value}", user_address)
         
         if success:
             return jsonify({"message": "Successfully joined waitlist", "artist": artist, "event_type": event_type_str, "user_address": user_address}), 201
         else:
-            return jsonify({"message": "You are already on the waitlist for this combination."}), 200 # Or 409 Conflict
+            return jsonify({"message": "You are already on the waitlist for this combination."}), 200
             
     except Exception as e:
         logger.error(f"Error joining waitlist: {e}")
@@ -1370,13 +1340,7 @@ def test_websocket_endpoint():
     the number of active connections.
     """
     try:
-        # Emit a test message to all connected clients
         socketio.emit('test_server_message', {'message': 'This is a test message from the server!', 'timestamp': time.time()})
-        
-        # Get the number of connected clients (this is an approximation, SocketIO manages SIDs)
-        # There isn't a direct way to get a count of all connected SIDs from the SocketIO object
-        # without iterating or using internal structures, which is not recommended.
-        # For a basic test, we can just confirm the emit happened.
         logger.info("Sent test_server_message to all connected WebSocket clients.")
         
         return jsonify({
@@ -1409,20 +1373,16 @@ def serve_index():
 scheduler = BackgroundScheduler()
 
 # Add the evolution job
-# Runs every hour, for demonstration. Adjust interval as needed.
-# In a production scenario, you might adjust the interval based on expected
-# frequency of evolution, e.g., daily ('interval', days=1).
-# For testing, you might use a shorter interval like minutes=1.
 scheduler.add_job(
     func=check_for_nft_evolution_jobs,
-    trigger=IntervalTrigger(minutes=5), # Check every 5 minutes
+    trigger=IntervalTrigger(minutes=5),
     id='nft_evolution_job',
     name='Check and evolve NFTs',
     replace_existing=True,
-    max_instances=1 # Ensure only one instance runs at a time
+    max_instances=1
 )
 
-# Add a job to retry failed canister mints (e.g., every 30 minutes)
+# Add a job to retry failed canister mints
 scheduler.add_job(
     func=retry_canister_minting_background,
     trigger=IntervalTrigger(minutes=30),
@@ -1438,7 +1398,6 @@ if __name__ == '__main__':
     scheduler.start()
     logger.info("APScheduler started.")
     
-    # Ensure Flask and SocketIO run on the main thread
     port = int(os.environ.get("PORT", 5000))
     logger.info("🔄 About to start socketio server...")
     socketio.run(app, debug=False, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)

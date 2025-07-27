@@ -1414,7 +1414,8 @@ if __name__ == '__main__':
     logger.info("APScheduler started.")
     
     # Ensure Flask and SocketIO run on the main thread
+    port = int(os.environ.get("PORT", 5000))  # Render PORT mühit dəyişəni
     print("🔄 About to start socketio server...")
-    socketio.run(app, debug=False, host='127.0.0.1', port=5000, allow_unsafe_werkzeug=True)
+    socketio.run(app, debug=False, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
     print("✅ Server started successfully!")
 

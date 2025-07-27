@@ -1,8 +1,12 @@
+aiohttp
+APScheduler
+cryptography
+eventlet
 Flask
 Flask-Cors
 Flask-SocketIO
 gunicorn
-eventlet
-ic-py # Replace with the exact package name if different, e.g., dfinity-py, ic-agent-py etc.
+ic-py
+nltk
 python-dotenv
-APScheduler
+tweepy

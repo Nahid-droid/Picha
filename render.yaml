@@ -3,8 +3,7 @@ services:
     name: picha-backend
     env: python
     rootDir: nft_backend
-    buildCommand: pip install --upgrade pip && pip install -r requirements.txt
-    startCommand: python -m gunicorn app:app --bind 0.0.0.0:10000
+    buildCommand: pip install -r requirements.txt
     envVars:
       - key: FLASK_ENV
         value: production

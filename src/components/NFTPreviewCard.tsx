@@ -280,7 +280,7 @@ const NFTPreviewCard: React.FC<NFTPreviewCardProps> = ({
                       {/* Show small thumbnail of image from that version */}
                       {entry.image_url && (
                           <img
-                              src={`http://localhost:5000${entry.image_url}`}
+                              src={`${import.meta.env.VITE_API_BASE_URL}${entry.image_url}`}
                               alt={`Version ${entry.version}`}
                               className="w-20 h-20 object-cover rounded-md mt-2 border border-[--border]"
                           />

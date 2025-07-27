@@ -48,6 +48,7 @@ if Config.CANISTER_ENABLED:
 
 # Initialize Flask app
 app = Flask(__name__)
+CORS(app, supports_credentials=True)
 # Set a secret key for session management
 app.secret_key = os.getenv('FLASK_SECRET_KEY', 'a_very_secret_key_for_flask_session_development_only')
 if app.secret_key == 'a_very_secret_key_for_flask_session_development_only' and not Config.DEBUG:

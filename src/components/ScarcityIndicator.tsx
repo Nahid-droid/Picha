@@ -94,7 +94,7 @@ const ScarcityIndicator: React.FC<ScarcityIndicatorProps> = ({
   const [totalSupply, setTotalSupply] = useState(initialTotalSupply);
 
   // Use the custom WebSocket hook
-  const { socket, isConnected, error: wsError } = useWebSocket('http://localhost:5000'); // Your backend WebSocket URL
+  const { socket, isConnected, error: wsError } = useWebSocket(import.meta.env.VITE_API_BASE_URL); // Your backend WebSocket URL
 
   // Calculate percentage for progress bar
   const percentage = totalSupply > 0 ? (remainingSlots / totalSupply) * 100 : 0;

@@ -585,7 +585,7 @@ const NFTPreview: React.FC<NFTPreviewProps> = ({
                       {/* Show small thumbnail of image from that version */}
                       {entry.image_url && (
                           <img
-                              src={`http://localhost:5000${entry.image_url}`}
+                              src={`${import.meta.env.VITE_API_BASE_URL}${entry.image_url}`}
                               alt={`Version ${entry.version}`}
                               className="w-20 h-20 object-cover rounded-md mt-2 border border-[--border]"
                           />
@@ -805,7 +805,7 @@ const Index = () => {
   const fetchAllCombinationsScarcity = useCallback(async () => {
     setLoadingStates(prev => ({ ...prev, combinations: true }));
     try {
-      const response = await axios.get('http://localhost:5000/api/combinations');
+      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/combinations`);
       if (response.data?.combinations && Array.isArray(response.data.combinations)) {
         setAllCombinationsScarcity(response.data.combinations as CombinationScarcityAPI[]);
         console.log("Fetched and processed all combinations scarcity:", response.data.combinations);
@@ -833,11 +833,11 @@ const Index = () => {
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const [artistsResponse, eventsResponse] = await Promise.all([
-        axios.get('http://localhost:5000/api/artists', {
+        axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/artists`, {
           signal: controller.signal,
           timeout: 8000
         }),
-        axios.get('http://localhost:5000/api/events', {
+        axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/events`, {
           signal: controller.signal,
           timeout: 8000
         })
@@ -996,7 +996,7 @@ const Index = () => {
     try {
       // Redirect to your backend's OAuth initiation endpoint
       // The backend will then redirect to X
-      window.location.href = `http://localhost:5000/api/auth/x-initiate?wallet_principal=${wallet.principal}`;
+      window.location.href = `${import.meta.env.VITE_API_BASE_URL}/api/auth/x-initiate?wallet_principal=${wallet.principal}`;
     } catch (error) {
       console.error("Error initiating X OAuth:", error);
       setErrors(prev => ({ ...prev, xAuth: "Failed to initiate X account connection." }));
@@ -1012,7 +1012,7 @@ const Index = () => {
     if (socketRef.current && socketRef.current.connected) {
       return;
     }
-    const socket = io('http://localhost:5000', {
+    const socket = io(import.meta.env.VITE_API_BASE_URL, {
       transports: ['websocket'],
       reconnectionAttempts: 5,
       reconnectionDelay: 3000,
@@ -1121,7 +1121,7 @@ const Index = () => {
     const handleEvolutionUpdate = (data: EvolutionUpdateMessage) => {
       // Fetch the full NFT data again to get the latest evolution history and other fields
       // This is more robust than trying to merge partial updates locally
-      axios.get(`http://localhost:5000/api/nft/${data.nft_id}`)
+      axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/nft/${data.nft_id}`)
         .then(response => {
           const updatedNftData = response.data;
           if (updatedNftData) {
@@ -1290,7 +1290,7 @@ const Index = () => {
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for generation
 
       const response = await axios.post(
-        'http://localhost:5000/api/create-nft',
+        `${import.meta.env.VITE_API_BASE_URL}/api/create-nft`,
         requestData,
         {
           signal: controller.signal,
@@ -1335,7 +1335,7 @@ const Index = () => {
       // Build NFT data with fallbacks for missing fields
       const nftData: NFTData = {
           id: nft.nft_id || `nft-${Date.now()}`, // Use nft.nft_id
-          image_uri: `http://localhost:5000${nft.image_url}` || nft.image_uri || '', // Prepend base URL
+          image_uri: `${import.meta.env.VITE_API_BASE_URL}${nft.image_url}` || nft.image_uri || '', // Prepend base URL
           artist: nft.artist || selectedArtist || 'Unknown Artist',
           event_type: nft.event_type || selectedEvent || 'Unknown Event',
           version: nft.version || 1,

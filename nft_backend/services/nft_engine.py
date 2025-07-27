@@ -1,4 +1,4 @@
-import os
+import os # Make sure os is imported for path operations
 import time
 import random
 from datetime import datetime, timedelta
@@ -19,12 +19,39 @@ from services.social_media import SocialMediaService
 # For NLTK sentiment analysis
 import nltk
 from nltk.sentiment.vader import SentimentIntensityAnalyzer
-try:
-    nltk.data.find('sentiment/vader_lexicon.zip')
-except nltk.downloader.DownloadError:
-    nltk.download('vader_lexicon')
 
 logger = logging.getLogger(__name__)
+
+# --- CRITICAL FIX START: Ensure NLTK data is available ---
+# This block attempts to find the resource, and if not found (LookupError),
+# it will attempt to download it to the specified NLTK_DATA path.
+try:
+    nltk.data.find('sentiment/vader_lexicon.zip')
+    logger.info("NLTK vader_lexicon found.")
+except LookupError: # Correct exception for resource not found
+    logger.warning("NLTK vader_lexicon not found, attempting to download...")
+    # Get the NLTK_DATA path from environment, or default if not set
+    # This should match the path set in your render.yaml's NLTK_DATA envVar
+    nltk_data_path = os.getenv('NLTK_DATA', '/opt/render/project/src/nltk_data')
+    try:
+        # Create the directory if it doesn't exist. exist_ok=True prevents error if it already exists.
+        os.makedirs(nltk_data_path, exist_ok=True)
+        # Download to the specified directory
+        nltk.download('vader_lexicon', download_dir=nltk_data_path)
+        logger.info(f"NLTK vader_lexicon downloaded to {nltk_data_path}.")
+        # After downloading, explicitly add the path to NLTK's data path if not already there.
+        # This ensures NLTK knows where to look for the newly downloaded resource.
+        if nltk_data_path not in nltk.data.path:
+            nltk.data.path.append(nltk_data_path)
+        # Verify it can now be found after download and path update
+        nltk.data.find('sentiment/vader_lexicon.zip')
+        logger.info("NLTK vader_lexicon successfully verified after download.")
+    except Exception as e:
+        logger.error(f"Failed to download NLTK vader_lexicon: {e}", exc_info=True)
+        # Re-raise the exception to stop the application startup if a critical resource is missing
+        raise 
+# --- CRITICAL FIX END ---
+
 
 class NFTEngine:
     """Main NFT engine integrating all components, now including social media for evolution."""
@@ -58,13 +85,10 @@ class NFTEngine:
 
         logger.debug(f"DEBUG: Before generate_prompt call in create_nft. uniqueness_factors type: {type(uniqueness_factors)}")
         logger.debug(f"DEBUG: uniqueness_factors content: {uniqueness_factors}")
-        # Ensure uniqueness_factors is an instance of UniquenessFactors (it should be from app.py)
-        # FIX: Handle the case where uniqueness_factors might be a dictionary instead of UniquenessFactors object
-        # Replace the existing type checking section (around lines 50-60) with this:
-
-# FIX: Handle the case where uniqueness_factors might be a dictionary, string, or UniquenessFactors object
+        
+        # FIX: Handle the case where uniqueness_factors might be a dictionary, string, or UniquenessFactors object
         if isinstance(uniqueness_factors, str):
-    # Convert JSON string to UniquenessFactors object
+            # Convert JSON string to UniquenessFactors object
             try:
                 uniqueness_factors_dict = json.loads(uniqueness_factors)
                 uniqueness_factors = UniquenessFactors(**uniqueness_factors_dict)
@@ -85,6 +109,7 @@ class NFTEngine:
         elif not isinstance(uniqueness_factors, UniquenessFactors):
             logger.error(f"Type error: uniqueness_factors is not UniquenessFactors in create_nft, found {type(uniqueness_factors)}")
             raise TypeError("uniqueness_factors must be an instance of UniquenessFactors, a dictionary, or a JSON string")
+        
         # Generate initial image based on initial traits
         logger.debug(f"DEBUG: After conversion, uniqueness_factors type: {type(uniqueness_factors)}")
         logger.debug(f"DEBUG: After conversion, uniqueness_factors.location_hash: {uniqueness_factors.location_hash}")

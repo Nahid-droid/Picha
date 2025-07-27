@@ -1,6 +1,3 @@
-import eventlet # Import eventlet first
-eventlet.monkey_patch() # Apply monkey patch at the very beginning
-
 import os
 import random
 import asyncio
@@ -860,7 +857,7 @@ async def retry_canister_minting_background():
                     eventType=nft_data.get('event_type', 'unknown'),
                     prompt=nft_data.get('user_prompt', ''),
                     mode=nft_data.get('mode', 'unknown'),
-                    uniqueness_factors=uniqueness_factors_json,
+                    uniqueness_factors=uniqueness_factors_json, # Corrected variable name here
                     genetic_traits=genetic_traits_json,
                     scarcity_info=scarcity_info_json,
                     attributes=json.dumps(attributes_dict) # Ensure attributes is a JSON string
@@ -1394,6 +1391,8 @@ scheduler.add_job(
 
 
 if __name__ == '__main__':
+    import eventlet # Import eventlet here
+    eventlet.monkey_patch() # Apply monkey patch at the very beginning of the main block
     logger.info("Starting APScheduler...")
     scheduler.start()
     logger.info("APScheduler started.")

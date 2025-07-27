@@ -58,9 +58,11 @@ if app.secret_key == 'a_very_secret_key_for_flask_session_development_only' and 
 # Initialize Flask-SocketIO
 # Configure for both development and production
 if Config.DEBUG: # Development
-    socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ORIGINS, async_mode='gevent', logger=True, engineio_logger=True)
+    # Changed async_mode from 'gevent' to 'eventlet' to match Gunicorn worker
+    socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ORIGINS, async_mode='eventlet', logger=True, engineio_logger=True)
 else: # Production
-    socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ORIGINS, async_mode='gevent') # Use gevent for production for better performance
+    # Changed async_mode from 'gevent' to 'eventlet' to match Gunicorn worker
+    socketio = SocketIO(app, cors_allowed_origins=Config.CORS_ORIGINS, async_mode='eventlet') # Use eventlet for production for better performance
 
 # Setup CORS for the Flask app (HTTP endpoints)
 CORS(app, origins=Config.CORS_ORIGINS)
@@ -807,10 +809,10 @@ async def check_for_nft_evolution_jobs():
                 if evolved_nft_data:
                     broadcast_evolution_notification(
                         socketio, 
-                        evolved_nft_data.get('id'), 
-                        evolved_nft_data.get('version'), 
-                        evolved_nft_data.get('image_url'), 
-                        json.loads(evolved_nft_data.get('genetic_traits', '{}'))
+                        evolved_nft.get('id'), 
+                        evolved_nft.get('version'), 
+                        evolved_nft.get('image_url'), 
+                        json.loads(evolved_nft.get('genetic_traits', '{}'))
                     )
                     logger.info(f"Scheduler: Broadcasted evolution update for NFT ID: {nft_id}")
 
@@ -1418,4 +1420,3 @@ if __name__ == '__main__':
     print("🔄 About to start socketio server...")
     socketio.run(app, debug=False, host="0.0.0.0", port=port, allow_unsafe_werkzeug=True)
     print("✅ Server started successfully!")
-

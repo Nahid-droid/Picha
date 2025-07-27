@@ -3,3 +3,4 @@ flask-socketio
 gunicorn
 eventlet
 Flask-Cors 
+ic-py

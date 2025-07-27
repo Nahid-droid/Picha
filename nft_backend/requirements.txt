@@ -1,6 +1,8 @@
 Flask
-flask-socketio
+Flask-Cors
+Flask-SocketIO
 gunicorn
 eventlet
-Flask-Cors 
-ic-py
+ic-py # Replace with the exact package name if different, e.g., dfinity-py, ic-agent-py etc.
+python-dotenv
+APScheduler

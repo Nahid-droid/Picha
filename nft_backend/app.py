@@ -1,3 +1,7 @@
+# app.py
+import eventlet # Import eventlet first
+eventlet.monkey_patch() # Apply monkey patch at the very beginning of the file
+
 import os
 import random
 import asyncio
@@ -28,7 +32,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
-# Validate configuration
+# Validate configuration (This should be fine outside app context if it only reads env vars)
 Config.validate()
 
 # --- CORS Configuration Setup ---
@@ -46,21 +50,6 @@ if vercel_frontend_url not in allowed_origins:
 
 logger.info(f"Configured CORS allowed origins: {allowed_origins}")
 # --- End CORS Configuration Setup ---
-
-# Initialize canister client
-canister_client = None
-if Config.CANISTER_ENABLED:
-    try:
-        canister_client = CanisterClient(
-            canister_id=Config.CANISTER_ID,
-            network=Config.ICP_NETWORK,
-            timeout=Config.CANISTER_TIMEOUT,
-            max_retries=Config.CANISTER_MAX_RETRIES
-        )
-        logger.info(f"Canister client initialized successfully for network: {Config.ICP_NETWORK}")
-    except Exception as e:
-        logger.error(f"Failed to initialize canister client: {e}")
-        canister_client = None
 
 # Initialize Flask app
 app = Flask(__name__)
@@ -82,8 +71,24 @@ else: # Production
 # Setup WebSocket event handlers
 setup_websocket_handlers(socketio)
 
+# Initialize components that might interact with the database or canister
+# These are generally fine to initialize here as long as they don't *immediately*
+# try to use Flask's application context (e.g., current_app) during their __init__
+# If they did, you'd need to wrap their initialization in an app.app_context() block.
+canister_client = None
+if Config.CANISTER_ENABLED:
+    try:
+        canister_client = CanisterClient(
+            canister_id=Config.CANISTER_ID,
+            network=Config.ICP_NETWORK,
+            timeout=Config.CANISTER_TIMEOUT,
+            max_retries=Config.CANISTER_MAX_RETRIES
+        )
+        logger.info(f"Canister client initialized successfully for network: {Config.ICP_NETWORK}")
+    except Exception as e:
+        logger.error(f"Failed to initialize canister client: {e}")
+        canister_client = None
 
-# Initialize NFT Engine
 nft_engine = NFTEngine(
     stability_api_key=Config.STABILITY_API_KEY,
     db_path=Config.DATABASE_PATH,
@@ -92,9 +97,7 @@ nft_engine = NFTEngine(
     canister_client=canister_client # Pass canister client to NFT engine
 )
 
-# Initialize Social Media Service
 social_media_service = SocialMediaService()
-# Initialize Database Manager directly for OAuth routes if needed outside of nft_engine
 db_manager = DatabaseManager(db_path=Config.DATABASE_PATH)
 
 
@@ -1391,8 +1394,6 @@ scheduler.add_job(
 
 
 if __name__ == '__main__':
-    import eventlet # Import eventlet here
-    eventlet.monkey_patch() # Apply monkey patch at the very beginning of the main block
     logger.info("Starting APScheduler...")
     scheduler.start()
     logger.info("APScheduler started.")

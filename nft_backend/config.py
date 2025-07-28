@@ -23,20 +23,12 @@ class Config:
     if FLASK_SECRET_KEY == 'a_very_secret_key_for_flask_session_development_only':
         print("🚨 WARNING: FLASK_SECRET_KEY is not set in .env or is using a default value. This is insecure for production!")
 
-    # CORS origins
-    # IMPORTANT FIX: Reordered CORS_ORIGINS so that the actual frontend URL
-    # (http://localhost:8080) is the first element for backend redirects.
-    CORS_ORIGINS = [
-        'http://localhost:8080', # Frontend is running on this port
-        'http://127.0.0.1:8080',
-        'http://localhost:5173', 
-        'http://localhost:3000',
-        'http://127.0.0.1:5173',
-        'http://127.0.0.1:3000'
-    ]
+    # CORS origins - NOW READ DIRECTLY FROM ENVIRONMENT VARIABLE
+    # This should be a comma-separated string of allowed origins (e.g., "http://localhost:3000,https://your-vercel-app.vercel.app")
+    CORS_ORIGINS = os.getenv('CORS_ORIGINS', 'http://localhost:5000') # Default to backend's own origin for safety
 
     # Flask settings
-    DEBUG = True
+    DEBUG = True # You might want to set this via env var too: os.getenv('FLASK_DEBUG', 'True').lower() == 'true'
     HOST = '0.0.0.0'
     PORT = 5000
 

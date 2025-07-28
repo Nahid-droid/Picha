@@ -2,7 +2,7 @@ aiohttp
 APScheduler
 cryptography
 eventlet
-Flask
+Flask[async]
 Flask-Cors
 Flask-SocketIO
 gunicorn

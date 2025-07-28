@@ -43,10 +43,21 @@ if isinstance(Config.CORS_ORIGINS, str):
 elif isinstance(Config.CORS_ORIGINS, (list, tuple)):
     allowed_origins = list(Config.CORS_ORIGINS)
 
-# Add the specific Vercel URL if it's not already in the allowed_origins list.
-vercel_frontend_url = "https://picha-wfxt-nahid-droids-projects.vercel.app"
-if vercel_frontend_url not in allowed_origins:
-    allowed_origins.append(vercel_frontend_url)
+# Always allow localhost for development
+if "http://localhost:4173" not in allowed_origins:
+    allowed_origins.append("http://localhost:4173")
+if "http://localhost:3000" not in allowed_origins: # Common React dev server port
+    allowed_origins.append("http://localhost:3000")
+if "http://127.0.0.1:4173" not in allowed_origins:
+    allowed_origins.append("http://127.0.0.1:4173")
+if "http://127.0.0.1:3000" not in allowed_origins:
+    allowed_origins.append("http://127.0.0.1:3000")
+
+# Add the Vercel frontend URL from an environment variable, if available
+# This makes it dynamic and avoids hardcoding specific Vercel deployment URLs
+vercel_frontend_url_env = os.getenv('VERCEL_FRONTEND_URL')
+if vercel_frontend_url_env and vercel_frontend_url_env not in allowed_origins:
+    allowed_origins.append(vercel_frontend_url_env)
 
 logger.info(f"Configured CORS allowed origins: {allowed_origins}")
 # --- End CORS Configuration Setup ---
@@ -994,7 +1005,8 @@ async def x_initiate_auth():
     except Exception as e:
         logger.error(f"Error initiating X OAuth flow for wallet {wallet_principal}: {e}", exc_info=True)
         # Redirect back to frontend with an error status
-        frontend_callback_url = f"{Config.CORS_ORIGINS[0]}?auth_status=error&message=FailedToInitiateOAuth"
+        # Use the first allowed origin from Config.CORS_ORIGINS as a fallback
+        frontend_callback_url = f"{allowed_origins[0]}?auth_status=error&message=FailedToInitiateOAuth"
         return redirect(frontend_callback_url)
 
 
@@ -1014,7 +1026,8 @@ async def x_callback_auth():
         logger.error(f"x_callback_auth: Missing required parameters in callback or session. "
                      f"oauth_token: {bool(oauth_token)}, oauth_verifier: {bool(oauth_verifier)}, "
                      f"request_token_secret: {bool(request_token_secret)}, wallet_principal: {bool(wallet_principal)}")
-        frontend_callback_url = f"{Config.CORS_ORIGINS[0]}?auth_status=error&message=InvalidCallbackParameters"
+        # Use the first allowed origin from Config.CORS_ORIGINS as a fallback
+        frontend_callback_url = f"{allowed_origins[0]}?auth_status=error&message=InvalidCallbackParameters"
         return redirect(frontend_callback_url)
 
     try:
@@ -1049,7 +1062,7 @@ async def x_callback_auth():
         logger.info(f"X OAuth completed and tokens saved for wallet: {wallet_principal}, X user: @{social_auth.username}")
         # Redirect back to frontend with success status and user info
         frontend_callback_url = (
-            f"{Config.CORS_ORIGINS[0]}?auth_status=success"
+            f"{allowed_origins[0]}?auth_status=success" # Use the first allowed origin
             f"&platform=x"
             f"&username={social_auth.username}"
             f"&user_id={social_auth.social_user_id}"
@@ -1059,7 +1072,7 @@ async def x_callback_auth():
 
     except Exception as e:
         logger.error(f"Error completing X OAuth flow for wallet {wallet_principal}: {e}", exc_info=True)
-        frontend_callback_url = f"{Config.CORS_ORIGINS[0]}?auth_status=error&message=FailedToCompleteOAuth&details={str(e)}"
+        frontend_callback_url = f"{allowed_origins[0]}?auth_status=error&message=FailedToCompleteOAuth&details={str(e)}"
         return redirect(frontend_callback_url)
 
 

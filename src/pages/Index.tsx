@@ -707,6 +707,10 @@ const Index = () => {
   const socketRef = useRef<typeof Socket | null>(null);
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
 
+  // Define API and WebSocket base URLs from environment variables
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+  const WS_BASE_URL = import.meta.env.VITE_WS_BASE_URL || 'ws://localhost:5000';
+
   // Utility function to create standardized error objects
   const createAPIError = (error: unknown, context: string): APIError => {
     if (axios.isAxiosError(error)) {
@@ -805,7 +809,7 @@ const Index = () => {
   const fetchAllCombinationsScarcity = useCallback(async () => {
     setLoadingStates(prev => ({ ...prev, combinations: true }));
     try {
-      const response = await axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/combinations`);
+      const response = await axios.get(`${API_BASE_URL}/api/combinations`);
       if (response.data?.combinations && Array.isArray(response.data.combinations)) {
         setAllCombinationsScarcity(response.data.combinations as CombinationScarcityAPI[]);
         console.log("Fetched and processed all combinations scarcity:", response.data.combinations);
@@ -818,7 +822,7 @@ const Index = () => {
     } finally {
       setLoadingStates(prev => ({ ...prev, combinations: false }));
     }
-  }, []);
+  }, [API_BASE_URL]);
 
   // Enhanced data fetching with retry logic using useCallback to fix the dependency issue
   const fetchInitialData = useCallback(async (isRetry = false) => {
@@ -833,11 +837,11 @@ const Index = () => {
       const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const [artistsResponse, eventsResponse] = await Promise.all([
-        axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/artists`, {
+        axios.get(`${API_BASE_URL}/api/artists`, {
           signal: controller.signal,
           timeout: 8000
         }),
-        axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/events`, {
+        axios.get(`${API_BASE_URL}/api/events`, {
           signal: controller.signal,
           timeout: 8000
         })
@@ -887,7 +891,7 @@ const Index = () => {
     } finally {
       setLoadingStates(prev => ({ ...prev, initialData: false }));
     }
-  }, []); // Empty dependency array since function doesn't depend on any state
+  }, [API_BASE_URL]); // Dependency on API_BASE_URL
 
   // Enhanced retry logic
   const retryFetchInitialData = () => {
@@ -996,7 +1000,7 @@ const Index = () => {
     try {
       // Redirect to your backend's OAuth initiation endpoint
       // The backend will then redirect to X
-      window.location.href = `${import.meta.env.VITE_API_BASE_URL}/api/auth/x-initiate?wallet_principal=${wallet.principal}`;
+      window.location.href = `${API_BASE_URL}/api/auth/x-initiate?wallet_principal=${wallet.principal}`;
     } catch (error) {
       console.error("Error initiating X OAuth:", error);
       setErrors(prev => ({ ...prev, xAuth: "Failed to initiate X account connection." }));
@@ -1012,7 +1016,7 @@ const Index = () => {
     if (socketRef.current && socketRef.current.connected) {
       return;
     }
-    const socket = io(import.meta.env.VITE_API_BASE_URL, {
+    const socket = io(WS_BASE_URL, { // Use WS_BASE_URL here
       transports: ['websocket'],
       reconnectionAttempts: 5,
       reconnectionDelay: 3000,
@@ -1121,7 +1125,7 @@ const Index = () => {
     const handleEvolutionUpdate = (data: EvolutionUpdateMessage) => {
       // Fetch the full NFT data again to get the latest evolution history and other fields
       // This is more robust than trying to merge partial updates locally
-      axios.get(`${import.meta.env.VITE_API_BASE_URL}/api/nft/${data.nft_id}`)
+      axios.get(`${API_BASE_URL}/api/nft/${data.nft_id}`) // Use API_BASE_URL here
         .then(response => {
           const updatedNftData = response.data;
           if (updatedNftData) {
@@ -1151,7 +1155,7 @@ const Index = () => {
       socket.off('evolution_update', handleEvolutionUpdate);
       socket.disconnect();
     };
-  }, []);
+  }, [API_BASE_URL, WS_BASE_URL]); // Dependencies on API_BASE_URL and WS_BASE_URL
 
   // Join evolution room if an NFT is generated and has an ID
   useEffect(() => {
@@ -1290,7 +1294,7 @@ const Index = () => {
       const timeoutId = setTimeout(() => controller.abort(), 30000); // 30 second timeout for generation
 
       const response = await axios.post(
-        `${import.meta.env.VITE_API_BASE_URL}/api/create-nft`,
+        `${API_BASE_URL}/api/create-nft`, // Use API_BASE_URL here
         requestData,
         {
           signal: controller.signal,
@@ -1335,7 +1339,7 @@ const Index = () => {
       // Build NFT data with fallbacks for missing fields
       const nftData: NFTData = {
           id: nft.nft_id || `nft-${Date.now()}`, // Use nft.nft_id
-          image_uri: `${import.meta.env.VITE_API_BASE_URL}${nft.image_url}` || nft.image_uri || '', // Prepend base URL
+          image_uri: `${API_BASE_URL}${nft.image_url}` || nft.image_uri || '', // Prepend base URL
           artist: nft.artist || selectedArtist || 'Unknown Artist',
           event_type: nft.event_type || selectedEvent || 'Unknown Event',
           version: nft.version || 1,

@@ -74,7 +74,7 @@ setup_websocket_handlers(socketio)
 # Initialize components that might interact with the database or canister
 # These are generally fine to initialize here as long as they don't *immediately*
 # try to use Flask's application context (e.g., current_app) during their __init__
-# If they did, you'd need to wrap their initialization in an app.app_context() block.
+# If they did, you'd need to wrap their initialization in an an app.app_context() block.
 canister_client = None
 if Config.CANISTER_ENABLED:
     try:
@@ -1353,21 +1353,25 @@ def test_websocket_endpoint():
         return jsonify({"status": "error", "message": str(e)}), 500
 
 
-@app.route('/api/dist/js/<path:filename>')
-def serve_js(filename):
-    return send_from_directory(os.path.join('dist', 'js'), filename)
+# Removed routes for serving static frontend files from the backend
+# @app.route('/api/dist/js/<path:filename>')
+# def serve_js(filename):
+#     return send_from_directory(os.path.join('dist', 'js'), filename)
 
-@app.route('/api/dist/css/<path:filename>')
-def serve_css(filename):
-    return send_from_directory(os.path.join('dist', 'css'), filename)
+# @app.route('/api/dist/css/<path:filename>')
+# def serve_css(filename):
+#     return send_from_directory(os.path.join('dist', 'css'), filename)
 
-@app.route('/api/dist/<path:filename>')
-def serve_dist_files(filename):
-    return send_from_directory('dist', filename)
+# @app.route('/api/dist/<path:filename>')
+# def serve_dist_files(filename):
+#     return send_from_directory('dist', filename)
 
+# Replaced the root route to serve a health check instead of index.html
 @app.route('/')
-def serve_index():
-    return send_from_directory('dist', 'index.html')
+def root_health_check():
+    """A simple health check for the root endpoint."""
+    return jsonify({"status": "backend_healthy", "message": "Picha backend is running and ready for API requests."})
+
 
 # Initialize APScheduler
 scheduler = BackgroundScheduler()

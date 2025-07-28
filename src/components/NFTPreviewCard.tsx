@@ -66,6 +66,9 @@ const NFTPreviewCard: React.FC<NFTPreviewCardProps> = ({
   const [animateTraits, setAnimateTraits] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
 
+  // Define API_BASE_URL from environment variables
+  const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:5000';
+
   useEffect(() => {
     // Trigger animation when component mounts or geneticTraits change
     setTimeout(() => setAnimateTraits(true), 500);
@@ -280,7 +283,7 @@ const NFTPreviewCard: React.FC<NFTPreviewCardProps> = ({
                       {/* Show small thumbnail of image from that version */}
                       {entry.image_url && (
                           <img
-                              src={`${import.meta.env.VITE_API_BASE_URL}${entry.image_url}`}
+                              src={`${API_BASE_URL}${entry.image_url}`} // Use API_BASE_URL here
                               alt={`Version ${entry.version}`}
                               className="w-20 h-20 object-cover rounded-md mt-2 border border-[--border]"
                           />

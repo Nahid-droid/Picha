@@ -2,6 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef } from 'react';
 import WalletConnector from '@/components/WalletConnector'; // Ensure this import points to your WalletConnector
 import ScarcityIndicator from '@/components/ScarcityIndicator'; // Import ScarcityIndicator
+import NFTPreviewCard from '@/components/NFTPreviewCard'; // Import the consolidated NFTPreviewCard
 import { Wallet, Twitter, Star, Download, Zap, Palette, Building, User, Globe, CheckCircle, Wifi, WifiOff, XIcon, Loader2, AlertCircle, RefreshCw, Image, History, ChevronDown, ChevronUp, Coins, Sparkles, Calendar, Settings } from 'lucide-react';
 import axios, { AxiosError } from 'axios';
 import { toast } from 'sonner';
@@ -27,6 +28,8 @@ interface ScarcityInfo {
   price_multiplier: number;
   is_sold_out: boolean; // Added for explicit sold out status
   remaining_slots?: number; // Added for convenience
+  artist: string; // Added artist
+  eventType: string; // Added eventType
 }
 
 interface EvolutionEntry {
@@ -177,50 +180,6 @@ const PichaLogo = () => {
 
   return (
     <>
-      <style>{`
-        @keyframes morphAndRotate {
-          0% {
-            transform: rotate(0deg);
-            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-          }
-          50% {
-            transform: rotate(180deg);
-            border-radius: 60% 40% 30% 70% / 70% 50% 50% 30%;
-          }
-          100% {
-            transform: rotate(360deg);
-            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
-          }
-        }
-        
-        @keyframes textFlicker {
-          0%, 18%, 22%, 25%, 53%, 57%, 100% {
-            text-shadow:
-              0 0 5px #00f2ff,
-              0 0 10px #00f2ff,
-              0 0 20px #ff00e0,
-              0 0 35px #ff00e0;
-          }
-          20%, 24%, 55% {
-            text-shadow: none;
-          }
-        }
-        
-        .motif-shape::before {
-          content: '';
-          position: absolute;
-          top: 8px;
-          left: 8px;
-          right: 8px;
-          bottom: 8px;
-          border: 1px solid #ff00e0;
-          border-radius: inherit;
-          animation: morphAndRotate 12s infinite linear reverse;
-          box-shadow: 
-            inset 0 0 10px #ff00e0,
-            0 0 15px #ff00e0;
-        }
-      `}</style>
       <div style={logoStyles.logoContainer}>
         <div style={logoStyles.motifShape} className="motif-shape"></div>
         <div style={logoStyles.logoText}>
@@ -339,279 +298,6 @@ const CustomSelect: React.FC<CustomSelectProps> = ({ value, onChange, options, p
   );
 };
 
-// NFT Preview Component (Redesigned based on user's NFTPreview and existing NFTPreviewCard)
-interface NFTPreviewProps {
-  imageURI?: string;
-  artistStyle?: string;
-  eventType?: string;
-  version?: string;
-  timestamp?: string;
-  prompt?: string;
-  geneticTraits?: GeneticTraits;
-  scarcityInfo?: ScarcityInfo;
-  evolutionHistory?: EvolutionEntry[];
-  evolutionPeriodDays?: number;
-  onUpdatePreview?: () => void; // Added for advanced mode update button
-  isAdvancedMode?: boolean; // Added to control update button visibility
-}
-
-const NFTPreview: React.FC<NFTPreviewProps> = ({
-  imageURI,
-  artistStyle = 'Abstract Digital',
-  eventType = 'Art Exhibition',
-  version = 'v1.0',
-  timestamp = new Date().toLocaleDateString(),
-  prompt,
-  geneticTraits,
-  scarcityInfo,
-  evolutionHistory = [],
-  evolutionPeriodDays,
-  onUpdatePreview,
-  isAdvancedMode = false,
-}) => {
-  const [animateTraits, setAnimateTraits] = useState(false);
-  const [showHistory, setShowHistory] = useState(false);
-
-  useEffect(() => {
-    setTimeout(() => setAnimateTraits(true), 500);
-  }, [geneticTraits]); // Re-animate if traits change
-
-  const traitEntries = geneticTraits ? Object.entries(geneticTraits) : [];
-
-  const handleDownload = () => {
-    if (imageURI) {
-      const link = document.createElement('a');
-      link.href = imageURI;
-      link.download = `nft-${artistStyle.toLowerCase().replace(/\s+/g, '-')}-${Date.now()}.jpg`;
-      document.body.appendChild(link);
-      link.click();
-      document.body.removeChild(link);
-    }
-  };
-
-  const getRarityColor = (score: number): string => {
-    if (score >= 0.8) return 'text-[--hot-pink]'; // Legendary
-    if (score >= 0.6) return 'text-[--neon-purple]'; // Epic
-    if (score >= 0.4) return 'text-[--electric-blue]'; // Rare
-    if (score >= 0.2) return 'text-[--warning]'; // Uncommon
-    return 'text-[--muted-text]'; // Common
-  };
-
-  const getRarityLabel = (score: number): string => {
-    if (score >= 0.8) return 'Legendary';
-    if (score >= 0.6) return 'Epic';
-    if (score >= 0.4) return 'Rare';
-    if (score >= 0.2) return 'Uncommon';
-    return 'Common';
-  };
-
-  return (
-    <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 w-full">
-      {/* NFT Preview */}
-      <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-cyan-500/30 backdrop-blur-lg rounded-xl p-6">
-        <h3 className="text-xl text-center text-cyan-400 mb-4 font-bold">Your Generated NFT</h3>
-        <div className="relative aspect-square mb-4 bg-gradient-to-br from-cyan-400 to-pink-500 rounded-lg overflow-hidden">
-          {scarcityInfo && (
-            <div className="absolute top-3 left-3 z-10">
-              <div className="flex items-center space-x-1 px-3 py-1 bg-black/80 text-cyan-400 border border-cyan-400/50 rounded-full text-sm">
-                <Star className="w-4 h-4" />
-                <span>{getRarityLabel(scarcityInfo.rarity_score)}</span>
-              </div>
-            </div>
-          )}
-          {imageURI ? (
-            <img
-              src={imageURI}
-              alt="NFT Preview"
-              className="w-full h-full object-cover rounded-lg shadow-md transition-transform duration-300 group-hover:scale-[1.02]"
-              onError={(e) => {
-                console.error('Image failed to load:', imageURI);
-                e.currentTarget.style.display = 'none';
-                const placeholderText = document.createElement('div');
-                placeholderText.className = 'absolute inset-0 flex items-center justify-center text-[--muted-text] text-sm font-medium bg-[--background-secondary] rounded-lg';
-                placeholderText.innerText = 'Image not available';
-                e.currentTarget.parentElement?.appendChild(placeholderText);
-              }}
-            />
-          ) : (
-            <div className="absolute inset-0 flex items-center justify-center">
-              <Image className="w-24 h-24 text-white/50" />
-            </div>
-          )}
-        </div>
-        {imageURI && (
-          <button
-            onClick={handleDownload}
-            className="w-full bg-black/60 border border-cyan-500 text-cyan-400 hover:bg-cyan-500 hover:text-black transition-all duration-300 py-3 rounded-xl flex items-center justify-center"
-          >
-            <Download className="w-4 h-4 mr-2" />
-            Download NFT
-          </button>
-        )}
-      </div>
-
-      {/* NFT Stats */}
-      <div className="bg-gradient-to-br from-blue-900/20 to-purple-900/20 border border-cyan-500/30 backdrop-blur-lg rounded-xl p-6">
-        <h3 className="text-lg text-center text-white mb-4 font-bold">"{prompt || `${artistStyle} style ${eventType}`}"</h3>
-        <div className="space-y-6">
-          {/* Metadata Grid */}
-          <div className="grid grid-cols-2 gap-4 text-sm">
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-xs text-gray-400">
-                <User className="w-3 h-3 text-cyan-400" />
-                <span>Artist</span>
-              </div>
-              <p className="font-medium text-white truncate">{artistStyle}</p>
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-xs text-gray-400">
-                <Globe className="w-3 h-3 text-cyan-400" />
-                <span>Event</span>
-              </div>
-              <p className="font-medium text-white truncate">{eventType}</p>
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-xs text-gray-400">
-                <Calendar className="w-3 h-3 text-cyan-400" />
-                <span>Created</span>
-              </div>
-              <p className="font-medium text-white">{timestamp}</p>
-            </div>
-
-            <div className="space-y-1">
-              <div className="flex items-center gap-1 text-xs text-gray-400">
-                <Zap className="w-3 h-3 text-cyan-400" />
-                <span>Version</span>
-              </div>
-              <p className="font-medium text-white">{version}</p>
-            </div>
-          </div>
-
-          {/* Genetic Traits */}
-          {traitEntries.length > 0 && (
-            <div>
-              <h4 className="text-sm font-semibold text-white mb-3">Genetic Traits:</h4>
-              <div className="grid grid-cols-2 gap-4">
-                {traitEntries.map(([key, value]) => (
-                  <div key={key} className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-400 capitalize">
-                        {key.replace(/_/g, ' ')}
-                      </span>
-                      <span className="text-xs font-medium text-cyan-400">
-                        {Math.round(value * 100)}%
-                      </span>
-                    </div>
-                    <div className="w-full bg-black/50 rounded-full h-2 overflow-hidden">
-                      <div
-                        className="h-full bg-gradient-to-r from-cyan-400 to-pink-500 rounded-full transition-all duration-1000 ease-out"
-                        style={{
-                          width: animateTraits ? `${value * 100}%` : '0%'
-                        }}
-                      />
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {/* Evolution Info */}
-          {evolutionPeriodDays !== undefined && (
-            <div className="p-4 bg-cyan-500/10 border border-cyan-500/30 rounded-lg">
-              <div className="flex justify-between items-center mb-2">
-                <span className="text-sm text-gray-300">Evolution Interval:</span>
-                <span className="text-sm font-medium text-cyan-400">Every {evolutionPeriodDays} days</span>
-              </div>
-              <p className="text-xs text-gray-400">
-                This NFT will automatically evolve based on its owner's X activity.
-              </p>
-            </div>
-          )}
-
-          {/* Scarcity Info */}
-          {scarcityInfo && (
-            <div className="space-y-3">
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-300">Availability:</span>
-                <span className="text-sm font-medium text-cyan-400">
-                  {scarcityInfo.remaining_slots || (scarcityInfo.total_limit - scarcityInfo.minted_count)} remaining
-                </span>
-              </div>
-              <div className="flex justify-between items-center">
-                <span className="text-sm text-gray-300">Price Multiplier:</span>
-                <span className="text-sm font-medium text-yellow-400">{scarcityInfo.price_multiplier}x</span>
-              </div>
-            </div>
-          )}
-
-          {/* Evolution History Section */}
-          {evolutionHistory && evolutionHistory.length > 1 && (
-            <div className="border-t border-[--border] pt-6 space-y-4">
-              <button
-                onClick={() => setShowHistory(!showHistory)}
-                className="w-full flex items-center justify-between text-base font-medium text-[--neon-purple] hover:text-[--electric-blue] transition-colors duration-200"
-              >
-                <span className="flex items-center gap-2">
-                  <History className="w-5 h-5" />
-                  View Evolution History ({evolutionHistory.length} versions)
-                </span>
-                {showHistory ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-              </button>
-
-              {showHistory && (
-                <div className="space-y-4 max-h-60 overflow-y-auto pr-2 custom-scrollbar">
-                  {evolutionHistory.slice().reverse().map((entry, index) => (
-                    <div key={index} className="glassmorphism rounded-lg p-4 bg-[--background-secondary]/50 border border-[--border]">
-                      <div className="flex items-center justify-between text-xs text-[--muted-text] mb-2">
-                        <span>Version: <span className="font-medium text-[--electric-blue]">{entry.version}</span></span>
-                        <span>{new Date(entry.timestamp * 1000).toLocaleDateString()}</span>
-                      </div>
-                      <p className="text-sm font-medium mb-1 text-[--secondary-text]">Event: {entry.event.replace(/_/g, ' ').toUpperCase()}</p>
-                      <p className="text-xs text-[--muted-text] italic mb-2">"{entry.prompt_used}"</p>
-
-                      {entry.traits_changed && entry.traits_changed.length > 0 && (
-                        <div className="flex flex-wrap gap-1 mb-2">
-                          {entry.traits_changed.map(trait => (
-                            <span key={trait} className="text-xs px-2 py-0.5 border border-[--neon-purple]/30 text-[--neon-purple] rounded-full">
-                              {trait.replace(/_/g, ' ')}
-                            </span>
-                          ))}
-                        </div>
-                      )}
-
-                      {/* Show small thumbnail of image from that version */}
-                      {entry.image_url && (
-                          <img
-                              src={`${import.meta.env.VITE_API_BASE_URL}${entry.image_url}`}
-                              alt={`Version ${entry.version}`}
-                              className="w-20 h-20 object-cover rounded-md mt-2 border border-[--border]"
-                          />
-                      )}
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          )}
-
-          {isAdvancedMode && onUpdatePreview && (
-            <button
-              onClick={onUpdatePreview}
-              className="w-full px-6 py-3 rounded-lg text-base font-medium transition-all duration-300 transform hover:scale-[1.02]
-                         bg-gradient-to-r from-[--electric-blue] to-[--neon-purple] text-[--primary-text] shadow-lg hover:shadow-xl"
-            >
-              Update Preview
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-};
-
 // Feature Tag Component (Re-implemented from user's provided design)
 interface FeatureTagProps {
   children: React.ReactNode;
@@ -678,6 +364,7 @@ const Index = () => {
   const [isXConnected, setIsXConnected] = useState<boolean>(false);
   const [xUsername, setXUsername] = useState<string | null>(null);
   const [xUserId, setXUserId] = useState<string | null>(null);
+  const [redirectProcessed, setRedirectProcessed] = useState<boolean>(false); // New state to prevent re-processing redirect
 
   // Enhanced loading states
   const [loadingStates, setLoadingStates] = useState<LoadingStates>({
@@ -704,7 +391,7 @@ const Index = () => {
   const [allCombinationsScarcity, setAllCombinationsScarcity] = useState<CombinationScarcityAPI[]>([]);
 
   // WebSocket state
-  const socketRef = useRef<typeof Socket | null>(null);
+  const socketRef = useRef<typeof Socket | null>(null); // Corrected type to Socket
   const [isWebSocketConnected, setIsWebSocketConnected] = useState(false);
 
   // Define API and WebSocket base URLs from environment variables
@@ -933,6 +620,11 @@ const Index = () => {
 
   // X (Twitter) OAuth Callback Handling
   useEffect(() => {
+    // Only process redirect parameters once
+    if (redirectProcessed) {
+      return;
+    }
+
     const params = new URLSearchParams(window.location.search);
     const authStatus = params.get('auth_status');
     const platform = params.get('platform');
@@ -946,8 +638,6 @@ const Index = () => {
       setIsXConnected(true);
       setXUsername(username);
       setXUserId(userId);
-      // You might want to store this in local storage or state related to the wallet
-      // For now, let's just log it and display the status.
       localStorage.setItem('x-auth-status', JSON.stringify({
         isConnected: true,
         username,
@@ -956,8 +646,9 @@ const Index = () => {
         timestamp: Date.now()
       }));
       toast.success(`Connected to X as @${username}!`);
-      // Clear URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname);
+      // Clear URL parameters by replacing the current history entry
+      window.location.replace(window.location.pathname); // Use replace for a cleaner history
+      setRedirectProcessed(true);
     } else if (authStatus === 'error' && platform === 'x') {
       setIsXConnected(false);
       setXUsername(null);
@@ -968,25 +659,32 @@ const Index = () => {
       setErrors(prev => ({ ...prev, xAuth: detailedError }));
       toast.error('Failed to connect to X.');
       // Clear URL parameters
-      window.history.replaceState({}, document.title, window.location.pathname);
-    } else {
-        // Attempt to restore X auth status from local storage if not just redirected
-        try {
-            const savedXAuth = localStorage.getItem('x-auth-status');
-            if (savedXAuth) {
-                const authData = JSON.parse(savedXAuth);
-                if (authData.isConnected && authData.username && authData.userId) {
-                    setIsXConnected(true);
-                    setXUsername(authData.username);
-                    setXUserId(authData.userId);
-                }
-            }
-        } catch (e) {
-            console.warn("Failed to restore X auth from local storage", e);
-            localStorage.removeItem('x-auth-status');
-        }
+      window.location.replace(window.location.pathname); // Use replace for a cleaner history
+      setRedirectProcessed(true);
     }
-  }, []); // Run only once on component mount
+  }, [redirectProcessed]); // Dependency on redirectProcessed to run only once
+
+  // Effect to restore X auth status from local storage if no redirect parameters are present
+  useEffect(() => {
+    // Only attempt to restore if redirect parameters were NOT just processed
+    if (!redirectProcessed) {
+      try {
+        const savedXAuth = localStorage.getItem('x-auth-status');
+        if (savedXAuth) {
+          const authData = JSON.parse(savedXAuth);
+          if (authData.isConnected && authData.username && authData.userId) {
+            setIsXConnected(true);
+            setXUsername(authData.username);
+            setXUserId(authData.userId);
+          }
+        }
+      } catch (e) {
+        console.warn("Failed to restore X auth from local storage", e);
+        localStorage.removeItem('x-auth-status');
+      }
+    }
+  }, [redirectProcessed]);
+
 
   // Function to initiate X OAuth flow
   const handleConnectXAccount = async () => {
@@ -1150,10 +848,12 @@ const Index = () => {
     // Cleanup on unmount
     return () => {
       console.log('Index page: Disconnecting WebSocket...');
-      socket.off('new_mint', handleNewMint);
-      socket.off('scarcity_update', handleScarcityUpdate);
-      socket.off('evolution_update', handleEvolutionUpdate);
-      socket.disconnect();
+      if (socketRef.current) { // Check if socketRef.current is not null
+        socketRef.current.off('new_mint', handleNewMint);
+        socketRef.current.off('scarcity_update', handleScarcityUpdate);
+        socketRef.current.off('evolution_update', handleEvolutionUpdate);
+        socketRef.current.disconnect();
+      }
     };
   }, [API_BASE_URL, WS_BASE_URL]); // Dependencies on API_BASE_URL and WS_BASE_URL
 
@@ -1198,10 +898,9 @@ const Index = () => {
     localStorage.removeItem('connected-wallet');
     localStorage.removeItem('x-auth-status');
     try {
-      localStorage.removeItem('connected-wallet');
       toast.info('Wallet disconnected.');
     } catch (error) {
-      console.error('Failed to remove wallet from local storage:', error);
+      console.error('Failed to clear wallet from local storage:', error);
       toast.error('Failed to clear wallet connection. Please try again.');
     }
   }, []);
@@ -1348,9 +1047,14 @@ const Index = () => {
             luminosity: 0, architectural_complexity: 0, ethereal_quality: 0,
             evolution_speed: 0, style_intensity: 0, temporal_resonance: 0
           },
-          scarcity_info: nft.scarcity_info || { // Ensure default for scarcity_info
+          scarcity_info: nft.scarcity_info ? { // Ensure default for scarcity_info and include artist/eventType
+            ...nft.scarcity_info,
+            artist: nft.scarcity_info.artist || nft.artist || selectedArtist,
+            eventType: nft.scarcity_info.eventType || nft.event_type || selectedEvent
+          } : {
             combination: '', total_limit: 0, minted_count: 0, rarity_score: 0,
-            price_multiplier: 0, is_sold_out: false, remaining_slots: 0
+            price_multiplier: 0, is_sold_out: false, remaining_slots: 0,
+            artist: nft.artist || selectedArtist, eventType: nft.event_type || selectedEvent
           },
           prompt: nft.prompt || (mode === 'advanced' ? customPrompt : `${selectedArtist} style ${selectedEvent}`),
           evolution_history: nft.evolution_history || [], // Ensure evolution_history is present
@@ -1544,6 +1248,50 @@ const Index = () => {
           background: linear-gradient(90deg, transparent, rgba(255,255,255,.2), transparent);
           transform: translateX(-100%);
           animation: shimmer 1.5s infinite;
+        }
+
+        /* PichaLogo specific animations */
+        @keyframes morphAndRotate {
+          0% {
+            transform: rotate(0deg);
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+          }
+          50% {
+            transform: rotate(180deg);
+            border-radius: 60% 40% 30% 70% / 70% 50% 50% 30%;
+          }
+          100% {
+            transform: rotate(360deg);
+            border-radius: 30% 70% 70% 30% / 30% 30% 70% 70%;
+          }
+        }
+        
+        @keyframes textFlicker {
+          0%, 18%, 22%, 25%, 53%, 57%, 100% {
+            text-shadow:
+              0 0 5px var(--cyber-cyan, #00f2ff),
+              0 0 10px var(--cyber-cyan, #00f2ff),
+              0 0 20px var(--cyber-pink, #ff00e0),
+              0 0 35px var(--cyber-pink, #ff00e0);
+          }
+          20%, 24%, 55% {
+            text-shadow: none;
+          }
+        }
+        
+        .motif-shape::before {
+          content: '';
+          position: absolute;
+          top: 8px;
+          left: 8px;
+          right: 8px;
+          bottom: 8px;
+          border: 1px solid #ff00e0;
+          border-radius: inherit;
+          animation: morphAndRotate 12s infinite linear reverse;
+          box-shadow: 
+            inset 0 0 10px #ff00e0,
+            0 0 15px #ff00e0;
         }
       `}</style>
       <div className="min-h-screen py-12 px-4 bg-[--background-dark] text-[--primary-text] font-inter" style={{ backgroundImage: 'var(--background-radial-gradient)' }}>
@@ -1856,7 +1604,7 @@ const Index = () => {
                 Your Generated NFT
               </h2>
               <div className="flex justify-center">
-                <NFTPreview
+                <NFTPreviewCard // Using the imported NFTPreviewCard
                   artistStyle={nftResult.artist}
                   eventType={nftResult.event_type}
                   version={`v${nftResult.version}`}

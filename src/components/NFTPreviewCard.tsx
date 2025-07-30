@@ -23,6 +23,8 @@ interface ScarcityInfo {
   price_multiplier: number;
   is_sold_out: boolean;
   remaining_slots?: number;
+  artist: string; // Added artist
+  eventType: string; // Added eventType
 }
 
 interface EvolutionEntry {
